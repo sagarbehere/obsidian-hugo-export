@@ -34,7 +34,8 @@ def copy_source_to_target():
     shutil.copytree(pathlib.Path(origin), pathlib.Path(destination), dirs_exist_ok=True)
 
 def delete_target():
-    shutil.rmtree(dest_dir_path)
+    if os.path.isdir(dest_dir_path):
+        shutil.rmtree(dest_dir_path)
 
 def create_index_files():
     for root, dirs, files in os.walk(dest_dir_path):
