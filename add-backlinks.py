@@ -2,11 +2,13 @@ import pathlib
 import sqlite3
 import logging
 
+#TODO: FIXME: This script _must_ be executed in the folder that contains the notes/ folder
+
 def add_backlinks(dbconn):
 	dbcursor = dbconn.cursor()
 	dbcursor.execute('''SELECT DISTINCT "to" FROM links''')
 	file_list = dbcursor.fetchall()
-	for file in file_list: # file list is [(path/to/file, ), (path/to/another/file, )]
+	for file in file_list: # file list is [(notes/path/to/file, ), (notes/path/to/another/file, )]
 		if file[0].endswith(".md"):
 			logging.info('Processing file %s', file[0])
 			dbcursor.execute('''SELECT DISTINCT "from", "from_title" FROM links WHERE "to" = ?''', (file[0], ))
@@ -32,8 +34,9 @@ def add_backlinks(dbconn):
 def main():
 	logging.basicConfig(filename='logs/add-backlinks.log', filemode='w', encoding='utf-8', level=logging.DEBUG)
 	logging.info('STARTING addition of backinks')
-	sqlitedbfilename = 'logs/relations.db'
-	dbconn = sqlite3.connect(sqlitedbfilename)
+
+	sqlitedbfilename = 'logs/relations.db' #TODO: Avoid hardcoded logs folder
+	dbconn = sqlite3.connect(sqlitedbfilename) #TODO: Error checking
 	
 	add_backlinks(dbconn)
 

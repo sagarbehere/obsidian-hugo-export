@@ -5,14 +5,21 @@ import os
 import sqlite3
 import frontmatter
 from datetime import datetime
+import argparse
+import sys
 
-origin = "/home/sagar/Documents/notes" #TODO: Fetch from args and cleanup
-destination = "./notes" #TODO fetch from args and cleanup
-dest_dir_path = pathlib.Path(destination)
-exclude_dirs = ['daily notes', 'drafts', 'no publish', '.git', '.obsidian'] #TODO: Avoid hardcoding?
+# List of folder and files to be excluded
+excludes = ['daily notes', 'drafts', 'no publish', '.git', '.obsidian', '.gitignore'] #TODO: Avoid hardcoding?
 
-def prune_nopublish():
-    for file in dest_dir_path.rglob("*.md"):
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('origin', help="Location of Obsidian vault", default="/home/sagar/Documents/notes")
+    parser.add_argument('destination', help="Location of notes folder in Hugo. Typically, something like $HUGO_SITE/content/notes", default="./notes")
+    args = parser.parse_args()
+    return (args.origin, args.destination)
+
+def prune_nopublish(destination):
+    for file in destination.rglob("*.md"):
         post = frontmatter.load(file)
         if 'publish' in post.keys():
             if post['publish'] != True:
@@ -22,23 +29,20 @@ def prune_nopublish():
         else:
             logging.warning("Removing file %s because it has no publish key in frontmatter", file)
             os.remove(file)
-        #print(file)
 
-def remove_exclude_dirs():
-    for dir in exclude_dirs:
-        #print(dest_dir_path / dir)
-        logging.info ("Removing excluded dir %s", dest_dir_path / dir)
-        shutil.rmtree(dest_dir_path / dir)
+def copy_source_to_target(origin, destination):
+    # The * in *excludes below is the unpack operator. It unpacks the list and presents its contents as arguments to the function
+    # the ignore= is used to exclude the folders/files in excludes from being copied
+    shutil.copytree(origin, destination, ignore=shutil.ignore_patterns(*excludes) , dirs_exist_ok=True)
 
-def copy_source_to_target():
-    shutil.copytree(pathlib.Path(origin), pathlib.Path(destination), dirs_exist_ok=True)
+def delete_target(destination):
+    if os.path.isdir(destination):
+        shutil.rmtree(destination)
+    else:
+        logging.info("DESTINATION folder %s does not exist.", str(destination))
 
-def delete_target():
-    if os.path.isdir(dest_dir_path):
-        shutil.rmtree(dest_dir_path)
-
-def create_index_files():
-    for root, dirs, files in os.walk(dest_dir_path):
+def create_index_files(destination):
+    for root, dirs, files in os.walk(destination):
         for dir in dirs:
             # If it contains at least one .md file, then create _index.md if it does not already exist
             if any(filename.endswith(".md") for filename in os.listdir(os.path.join(root, dir))):
@@ -56,7 +60,7 @@ def create_index_files():
                     f.close()
                     logging.info("CREATED file %s", indx_file)
 
-def root_to_index(): # moves root.md in notes/_index.md and modifies frontmatter
+def root_to_index(destination): # moves root.md in notes/_index.md and modifies frontmatter
     indx_file = pathlib.Path(destination, '_index.md')
     shutil.move(pathlib.Path(destination, 'root.md'), indx_file)
     post = frontmatter.load(indx_file)
@@ -71,8 +75,8 @@ def root_to_index(): # moves root.md in notes/_index.md and modifies frontmatter
     frontmatter.dump(post, f)
     f.close()
 
-def add_frontmatter_date(): # add 'date' frontmatter variable because Hugo needs it
-    for file in dest_dir_path.glob('**/*'):
+def add_frontmatter_date(destination): # add 'date' frontmatter variable because Hugo needs it
+    for file in destination.glob('**/*'):
         if str(file).endswith(".md"):
             post = frontmatter.load(file)
             post['date'] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -88,23 +92,28 @@ def main():
     pathlib.Path('logs').mkdir(parents=True, exist_ok=True) # Create logs/ dir if it does not exist
     logging.basicConfig(filename='logs/export-files.log', filemode='w', encoding='utf-8', level=logging.DEBUG)
 
-    logging.info("DELETING target folder")
-    delete_target()
-    logging.info("COPYING Obsidian vault to target folder")
-    copy_source_to_target()
+    (origin_str, destination_str) = parse_args()
+    origin = pathlib.Path(origin_str)
+    destination = pathlib.Path(destination_str)
+    logging.info("ORIGIN: %s , DESTINATION: %s", origin_str, destination_str)
+    if not os.path.isdir(origin):
+        print("ORIGIN folder does not exist. Aborting!")
+        sys.exit(1)
 
-    logging.info ("REMOVING excluded folders")
-    remove_exclude_dirs()
+    logging.info("DELETING target folder %s", destination_str)
+    delete_target(destination)
+    logging.info("COPYING Obsidian vault to target folder %s", destination_str)
+    copy_source_to_target(origin, destination)
 
     logging.info("CREATING _index.md files")
-    create_index_files()
-    root_to_index()
+    create_index_files(destination)
+    root_to_index(destination)
 
     logging.info ("PRUNING files with publish != True")
-    prune_nopublish()
+    prune_nopublish(destination)
 
     logging.info("ADDING dates to frontmatter")
-    add_frontmatter_date()
+    add_frontmatter_date(destination)
 
 if __name__ == "__main__":
     main()

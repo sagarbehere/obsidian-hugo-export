@@ -12,10 +12,17 @@ import pathlib
 import sqlite3
 import frontmatter
 import logging
+import argparse
 
 wikilinks = re.compile(r"\s\[\[(([^\]|]|\](?=[^\]]))*)(\|(([^\]]|\](?=[^\]]))*))?\]\]")
 codeblocks = re.compile(r"```\w*[^`]+```")
-destdir = pathlib.Path("notes/") 
+# destdir = pathlib.Path("notes/")
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('destination', help="Location of notes folder in Hugo. Typically, something like $HUGO_SITE/content/notes", default="./notes")
+    args = parser.parse_args()
+    return (args.destination)
 
 def mangle_codeblocks(match):
 	return match.group().replace("[[", "-[[")
@@ -31,7 +38,7 @@ def get_post_title(file):
 	else:
 		return 'Unknown title of'+str(file)
 
-def process_wikilink(match, dbconn, file):
+def process_wikilink(match, dbconn, destination, file):
 	dbcursor = dbconn.cursor()
 	
 	label = match.group(4)
@@ -42,10 +49,10 @@ def process_wikilink(match, dbconn, file):
 		label = label.strip()
 
 	title = get_post_title(file)
-	# print("From: ", str(file), "From title: ", title, "To :", str(destdir)+"/"+url+".md")
-	dbcursor.execute('''INSERT INTO links ("from", "from_title", "to") VALUES (?, ?, ?)''', (str(file), title, str(destdir)+"/"+url+".md"))
+	# print("From: ", str(file), "From title: ", title, "To :", str(destination)+"/"+url+".md")
+	dbcursor.execute('''INSERT INTO links ("from", "from_title", "to") VALUES (?, ?, ?)''', (str(file), title, str(destination)+"/"+url+".md"))
 	dbconn.commit()
-	newlink = " ["+label+"]({{< ref \""+"/"+str(destdir)+"/"+url+"\" >}})"
+	newlink = " ["+label+"]({{< ref \""+"/"+str(destination)+"/"+url+"\" >}})"
 
 	logging.info("File %s: Found %s and replacing it with %s", str(file), match.group(0), newlink)
 	return newlink
@@ -53,15 +60,23 @@ def process_wikilink(match, dbconn, file):
 def main():
 	logging.basicConfig(filename='logs/process-wikilinks.log', filemode='w', encoding='utf-8', level=logging.DEBUG)
 	logging.info('STARTING processing of wikilinks')
-	sqlitedbfilename = 'logs/relations.db'
-	dbconn = sqlite3.connect(sqlitedbfilename)
+
+	destination_str = parse_args()
+	destination = pathlib.Path(destination_str)
+	logging.info("DESTINATION: %s", destination_str)
+	if not os.path.isdir(destination):
+		print("DESTINATION folder does not exist. Aborting!")
+		sys.exit(1)
+
+	sqlitedbfilename = 'logs/relations.db' #TODO: Avoid hardcoded logs directory here
+	dbconn = sqlite3.connect(sqlitedbfilename) #TODO: Error checking on this function
 
 	dbconn.execute('''CREATE TABLE IF NOT EXISTS links (id INTEGER UNIQUE NOT NULL PRIMARY KEY AUTOINCREMENT, "from" TEXT NOT NULL, from_title TEXT, "to" TEXT NOT NULL, to_title TEXT)''')
 	dbconn.execute('''DELETE FROM links''')
 	dbconn.execute('''DELETE FROM SQLITE_SEQUENCE WHERE name="links"''') # reset the autoincrement id
 	dbconn.commit()
 	
-	for file in destdir.glob('**/*'):
+	for file in destination.glob('**/*'):
 		if str(file).endswith(".md"):
 			newfiledata = ''
 			with open(file, 'r') as f:
@@ -72,7 +87,7 @@ def main():
 					filedata = tuples[2].strip()
 				# Seek out all fenced codeblocks in the file and if they contain a wikilink, mangle it by replacing all [[ with -[[ so that the wikilink detector regex will not match it. This will prevent the processing of wikilinks inside fenced code blocks.
 				mangledfiledata = codeblocks.sub(lambda x: mangle_codeblocks(x), filedata)
-				processedlinksdata = wikilinks.sub(lambda x: process_wikilink(x, dbconn, file), mangledfiledata)
+				processedlinksdata = wikilinks.sub(lambda x: process_wikilink(x, dbconn, destination, file), mangledfiledata)
 				# Now that wikilinks are processed, unmagle any wikilinks inside fenced code blocks
 				newfiledata = codeblocks.sub(lambda x: unmangle_codeblocks(x), processedlinksdata)
 				if tuples[0]: # If the file did contain a ## Backlinks section, add it back
