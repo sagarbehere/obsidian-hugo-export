@@ -9,7 +9,7 @@ import argparse
 import sys
 
 # List of folder and files to be excluded
-excludes = ['daily notes', 'drafts', 'no publish', '.git', '.obsidian', '.gitignore'] #TODO: Avoid hardcoding?
+excludes = ['daily notes', 'drafts', 'no publish', '.git', '.obsidian', '.gitignore', 'assets', 'blog', 'templates'] #TODO: Avoid hardcoding?
 
 def parse_args():
     parser = argparse.ArgumentParser()
