@@ -52,6 +52,8 @@ def process_wikilink(match, dbconn, destination, file):
 	# print("From: ", str(file), "From title: ", title, "To :", str(destination)+"/"+url+".md")
 	dbcursor.execute('''INSERT INTO links ("from", "from_title", "to") VALUES (?, ?, ?)''', (str(file), title, str(destination)+"/"+url+".md"))
 	dbconn.commit()
+	if url.endswith("_index"): # In Hugo, an _index.md file can only be referenced by its containing folder. So if any urls end with _index, that trailing _index needs to be removed
+		url = url.rpartition("/")[0] #split the url at the last occurrence of "/" and return a 3-tuple containing the part before the separator i.e. [0], the separator itself i.e[1], and the part after the separator i.e. [2]
 	newlink = " ["+label+"]({{< ref \""+"/"+str(destination)+"/"+url+"\" >}})"
 
 	logging.info("File %s: Found %s and replacing it with %s", str(file), match.group(0), newlink)
