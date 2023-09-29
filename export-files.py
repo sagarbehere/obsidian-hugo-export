@@ -19,7 +19,7 @@ def parse_args():
     return (args.origin, args.destination)
 
 def prune_nopublish(destination):
-    for file in destination.rglob("*.md"):
+    for file in destination.rglob("*.md"): # Finds all .md files in the destination folder tree
         post = frontmatter.load(file)
         if 'publish' in post.keys():
             if post['publish'] != True:
