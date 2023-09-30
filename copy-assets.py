@@ -33,7 +33,7 @@ def to_be_published(file):
     if 'publish' in post.keys():
         return (post['publish'])
     else:
-        logging.info("ERROR: File %s has no publish key in frontmatter", str(file))
+        logging.error("ERROR: File %s has no publish key in frontmatter", str(file))
         return False
 
 def main():

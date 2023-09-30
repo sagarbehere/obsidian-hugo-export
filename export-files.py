@@ -10,7 +10,7 @@ import sys
 
 # List of folder and files to be excluded
 #TODO: Avoid hardcoding?
-#TODO: FIXME: If folders with names in excludes are present _anywhere_ in the directory hierarchy, not just at the top level, they'll be excluded.
+#TODO: FIXME: If folders with names in exclude_dirs are present _anywhere_ in the directory hierarchy, not just at the top level, they'll be excluded.
 exclude_dirs = ['daily notes', 'drafts', 'no publish', '.git', '.obsidian', 'assets', 'templates']
 exclude_files = ['.gitignore']
 
@@ -41,7 +41,7 @@ def to_be_published(file):
         else:
             return True
     else:
-        logging.info("ERROR: File %s has no publish key in frontmatter", str(file))
+        logging.error("ERROR: File %s has no publish key in frontmatter", str(file))
         return False
 
 # Below func is called by shutil.copytree in copy_source_to_target
@@ -51,10 +51,9 @@ def ignore_func(root, subdir):
     ignore_list = []
     for item in subdir:
         # Why both 'str(os.path.join(root, item)) in exclude_files' AND 'item in exclude_files'?
-        # Because the former is full path name. So if there are any unqualified path names e.g. .gitignore in exclude_files (instead of /home/sagar/Documents/notes/.gitignore), they won't match the former and will not be ignored. But they will match the latter.
+        # Because the former is full path name. So if there are any unqualified/relative path names e.g. .gitignore in exclude_files (instead of /home/sagar/Documents/notes/.gitignore), they won't match the former and will not be ignored. But they will match the latter.
         if str(os.path.join(root, item)) in exclude_files or item in exclude_dirs or item in exclude_files:
             ignore_list.append(item)
-    #print(str(root), "-->", ignore_list)
     logging.info("IGNORING %s --> %s", str(root), ignore_list)
     return ignore_list
 
@@ -64,8 +63,8 @@ def copy_source_to_target(origin, destination):
     # shutil.copytree(origin, destination, ignore=shutil.ignore_patterns(*excludes) , dirs_exist_ok=True)
     shutil.copytree(origin, destination, ignore=ignore_func, dirs_exist_ok=True)
 
-def create_files_nopublish(origin):
-    #TODO: FIXME: Below is inefficient because it goes through files in the directories that are already excluded via the exclude list. It should avoid going through files in the directories mentioned in exclude list
+def create_nopublish_files_list(origin):
+    #TODO: FIXME: Below is inefficient because it goes through files in the directories that are already excluded via the exclude_dirs list. It should avoid going through files in the directories mentioned in exclude_dirs list
     for file in origin.rglob("*.md"):
         if not to_be_published(file):
             exclude_files.append(str(file))
@@ -138,7 +137,7 @@ def main():
     logging.info("DELETING target folder %s", destination_str)
     delete_target(destination)
 
-    create_files_nopublish(origin)
+    create_nopublish_files_list(origin)
 
     logging.info("COPYING Obsidian vault to target folder %s", destination_str)
     copy_source_to_target(origin, destination)
