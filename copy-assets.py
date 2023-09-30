@@ -56,7 +56,7 @@ def main():
             with open(file, 'r') as f:
                 file_content = f.read()
                 for image in images.finditer(file_content): # image.group(0) is the matched string, image.group(1) is the path/to/image.ext, image.group(2) is the title, if present
-                    full_imagefile_path = pathlib.Path(origin, image.group(1).strip("/"))
+                    full_imagefile_path = pathlib.Path(origin, image.group(1).strip("/")) # Need to remove leading / else pathlib.Path will ignore origin. pathlib.Path() ignores all arguments preceding an argument which contains absolute paths
                     # print(str(file), " --> ", str(full_imagefile_path))
                     if os.path.isfile(full_imagefile_path):
                         # Copy it over?
