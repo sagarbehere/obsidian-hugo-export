@@ -9,7 +9,10 @@ import argparse
 import sys
 
 # List of folder and files to be excluded
-excludes = ['daily notes', 'drafts', 'no publish', '.git', '.obsidian', '.gitignore', 'assets', 'blog', 'templates'] #TODO: Avoid hardcoding?
+#TODO: Avoid hardcoding?
+#TODO: FIXME: If folders with names in excludes are present _anywhere_ in the directory hierarchy, not just at the top level, they'll be excluded.
+exclude_dirs = ['daily notes', 'drafts', 'no publish', '.git', '.obsidian', 'assets', 'templates']
+exclude_files = ['.gitignore']
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -18,22 +21,54 @@ def parse_args():
     args = parser.parse_args()
     return (args.origin, args.destination)
 
-def prune_nopublish(destination):
-    for file in destination.rglob("*.md"): # Finds all .md files in the destination folder tree
-        post = frontmatter.load(file)
-        if 'publish' in post.keys():
-            if post['publish'] != True:
-                logging.info("%s has frontmatter publish = %s which is not True", file, post['publish'])
-                logging.info("Removing file %s because publish != True", file)
-                os.remove(file)
+#def prune_nopublish(destination):
+    #for file in destination.rglob("*.md"): # Finds all .md files in the destination folder tree
+        #post = frontmatter.load(file)
+        #if 'publish' in post.keys():
+            #if post['publish'] != True:
+                #logging.info("%s has frontmatter publish = %s which is not True", file, post['publish'])
+                #logging.info("Removing file %s because publish != True", file)
+                #os.remove(file)
+        #else:
+            #logging.warning("Removing file %s because it has no publish key in frontmatter", file)
+            #os.remove(file)
+
+def to_be_published(file):
+    post = frontmatter.load(file)
+    if 'publish' in post.keys():
+        if post['publish'] != True:
+            return False
         else:
-            logging.warning("Removing file %s because it has no publish key in frontmatter", file)
-            os.remove(file)
+            return True
+    else:
+        logging.info("ERROR: File %s has no publish key in frontmatter", str(file))
+        return False
+
+# Below func is called by shutil.copytree in copy_source_to_target
+# first argument is a dir. Second argument is a list of dir's contents as output by os.listdir()
+# Returt should be a sequence of items to be ignored
+def ignore_func(root, subdir):
+    ignore_list = []
+    for item in subdir:
+        # Why both 'str(os.path.join(root, item)) in exclude_files' AND 'item in exclude_files'?
+        # Because the former is full path name. So if there are any unqualified path names e.g. .gitignore in exclude_files (instead of /home/sagar/Documents/notes/.gitignore), they won't match the former and will not be ignored. But they will match the latter.
+        if str(os.path.join(root, item)) in exclude_files or item in exclude_dirs or item in exclude_files:
+            ignore_list.append(item)
+    #print(str(root), "-->", ignore_list)
+    logging.info("IGNORING %s --> %s", str(root), ignore_list)
+    return ignore_list
 
 def copy_source_to_target(origin, destination):
     # The * in *excludes below is the unpack operator. It unpacks the list and presents its contents as arguments to the function
     # the ignore= is used to exclude the folders/files in excludes from being copied
-    shutil.copytree(origin, destination, ignore=shutil.ignore_patterns(*excludes) , dirs_exist_ok=True)
+    # shutil.copytree(origin, destination, ignore=shutil.ignore_patterns(*excludes) , dirs_exist_ok=True)
+    shutil.copytree(origin, destination, ignore=ignore_func, dirs_exist_ok=True)
+
+def create_files_nopublish(origin):
+    #TODO: FIXME: Below is inefficient because it goes through files in the directories that are already excluded via the exclude list. It should avoid going through files in the directories mentioned in exclude list
+    for file in origin.rglob("*.md"):
+        if not to_be_published(file):
+            exclude_files.append(str(file))
 
 def delete_target(destination):
     if os.path.isdir(destination):
@@ -102,6 +137,9 @@ def main():
 
     logging.info("DELETING target folder %s", destination_str)
     delete_target(destination)
+
+    create_files_nopublish(origin)
+
     logging.info("COPYING Obsidian vault to target folder %s", destination_str)
     copy_source_to_target(origin, destination)
 
@@ -109,8 +147,8 @@ def main():
     create_index_files(destination)
     root_to_index(destination)
 
-    logging.info ("PRUNING files with publish != True")
-    prune_nopublish(destination)
+    #logging.info ("PRUNING files with publish != True")
+    #prune_nopublish(destination)
 
     logging.info("ADDING dates to frontmatter")
     add_frontmatter_date(destination)
